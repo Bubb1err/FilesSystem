@@ -53,7 +53,7 @@ namespace FilesSystem.Services
                 Directory.Delete(path, recursive: true);
             }
         }
-        protected async Task TraverseTree(string root)
+       protected async Task TraverseTree(string root)
         {
             Stack<Folder> dirs = new Stack<Folder>(20);
 
