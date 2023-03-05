@@ -2,6 +2,10 @@
 <a asp-controller="Folders" asp-action="Upload" class="btn btn-primary">
     Upload Folder
 </a>
+<a asp-controller="Folders" asp-action="AddCsv" class="btn btn-primary">
+    Upload Csv
+</a>
+<a asp-controller="Folders" asp-action="DownloadCsv" class="btn btn-primary">Download Csv</a>
 <ul>
     @foreach (var folder in Model)
     {

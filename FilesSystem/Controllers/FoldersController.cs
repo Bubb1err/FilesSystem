@@ -45,5 +45,22 @@ namespace FilesSystem.Controllers
             return RedirectToAction("GetFolders");
 
         }
+        [HttpGet]
+        public IActionResult DownloadCsv()
+        {
+            return File(_service.GetBytesFromDb(), "text/csv", "Folders.csv");
+        }
+        [HttpGet]
+        public async Task<IActionResult> AddCsv()
+        {
+            return View();
+        }
+        [HttpPost]
+        public async Task<IActionResult> AddCsv(IFormFile csvFile)
+        {
+            await _service.ParseCsvAndAddToDb(csvFile);
+            return RedirectToAction("GetFolders");
+
+        }
     }
 }

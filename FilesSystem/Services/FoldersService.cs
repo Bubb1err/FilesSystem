@@ -1,10 +1,15 @@
-﻿using FilesSystem.Data;
+﻿using CsvHelper;
+using FilesSystem.Data;
 using FilesSystem.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using System;
 using System.Collections.Generic;
+using System.Formats.Asn1;
+using System.Globalization;
 using System.IO.Compression;
 using System.Linq.Expressions;
+using System.Text;
 
 namespace FilesSystem.Services
 {
@@ -23,6 +28,11 @@ namespace FilesSystem.Services
         public async Task AddAsync(Folder folder)
         {
             await _dbSet.AddAsync(folder);
+            await SaveAsync();
+        }
+        public async Task AddRangeAsync(IEnumerable<Folder> folders)
+        {
+            await _dbSet.AddRangeAsync(folders);
             await SaveAsync();
         }
 
@@ -53,7 +63,59 @@ namespace FilesSystem.Services
                 Directory.Delete(path, recursive: true);
             }
         }
-       protected async Task TraverseTree(string root)
+        public byte[] GetBytesFromDb()
+        {
+            var folders = _dbSet;
+
+            using var mem = new MemoryStream();
+            using var writer = new StreamWriter(mem, Encoding.UTF8);
+            using var csvWriter = new CsvWriter(writer, CultureInfo.InvariantCulture);
+            {
+                csvWriter.WriteField("Id");
+                csvWriter.WriteField("Name");
+                csvWriter.WriteField("Parent Id");
+                csvWriter.WriteField("Path");
+                csvWriter.NextRecord();
+                foreach (var folder in folders)
+                {
+                    csvWriter.WriteField(folder.Id);
+                    csvWriter.WriteField(folder.Name);
+                    var parentId = folder.ParentId == null ? -1 : folder.ParentId;
+                    csvWriter.WriteField(parentId);
+                    csvWriter.WriteField(" ");
+                    csvWriter.NextRecord();
+
+                }
+                writer.Flush();
+                mem.Seek(0, SeekOrigin.Begin);
+                return mem.ToArray();
+            }
+        }
+        public async Task ParseCsvAndAddToDb(IFormFile file)
+        {
+            var lines = new List<string>();
+            using (var reader = new StreamReader(file.OpenReadStream()))
+            {
+                while (reader.Peek() >= 0)
+                    lines.Add(reader.ReadLine());
+            }
+            int lastInd = _dbSet.OrderBy(x => x.Id).Last().Id;
+            List<Folder> folders = lines.Skip(1)
+                                        .Select(line => ParseCsv(line, lastInd))
+                                        .ToList();
+            await AddRangeAsync(folders);
+        }
+        public Folder ParseCsv(string line, int lastId)
+        {
+            var parts = line.Split(',');
+            return new Folder()
+            {
+                Name = parts[1],
+                ParentId = int.Parse(parts[2]) == -1 ? null : int.Parse(parts[2]) + lastId,
+                Path = ""
+            };
+        }
+        protected async Task TraverseTree(string root)
         {
             Stack<Folder> dirs = new Stack<Folder>(20);
 
