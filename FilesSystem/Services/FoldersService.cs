@@ -52,122 +52,181 @@ namespace FilesSystem.Services
         }
         public async Task WriteZipHierarchyToDb(IFormFile zip)
         {
-            using (ZipArchive archive = new ZipArchive(zip.OpenReadStream(), ZipArchiveMode.Read))
+            try
             {
-                var folders = new List<Folder>();
-                string path = Path.Combine(_enviroment.WebRootPath, "upload", zip.FileName.Split('.')[0]);
-                if (!Directory.Exists(path))
-                    Directory.CreateDirectory(path);
-                archive.ExtractToDirectory(path);
-                await TraverseTree(path);
-                Directory.Delete(path, recursive: true);
+                using (ZipArchive archive = new ZipArchive(zip.OpenReadStream(), ZipArchiveMode.Read))
+                {
+                    var folders = new List<Folder>();
+                    string path = Path.Combine(_enviroment.WebRootPath, "upload", zip.FileName.Split('.')[0]);
+                    if (!Directory.Exists(path))
+                        Directory.CreateDirectory(path);
+                    archive.ExtractToDirectory(path);
+                    await TraverseTree(path);
+                    Directory.Delete(path, recursive: true);
+                }
             }
+            catch(ArgumentException) 
+            {
+                throw new ArgumentException();
+            }
+            catch(InvalidDataException) 
+            {
+                throw new InvalidDataException();
+            }
+            catch (IOException)
+            {
+                throw new IOException();
+            }
+            catch (Exception)
+            {
+                throw new Exception();
+            }
+
+
         }
         public byte[] GetBytesFromDb()
         {
             var folders = _dbSet;
-
-            using var mem = new MemoryStream();
-            using var writer = new StreamWriter(mem, Encoding.UTF8);
-            using var csvWriter = new CsvWriter(writer, CultureInfo.InvariantCulture);
+            try
             {
-                csvWriter.WriteField("Id");
-                csvWriter.WriteField("Name");
-                csvWriter.WriteField("Parent Id");
-                csvWriter.WriteField("Path");
-                csvWriter.NextRecord();
-                foreach (var folder in folders)
+                using var mem = new MemoryStream();
+                using var writer = new StreamWriter(mem, Encoding.UTF8);
+                using var csvWriter = new CsvWriter(writer, CultureInfo.InvariantCulture);
                 {
-                    csvWriter.WriteField(folder.Id);
-                    csvWriter.WriteField(folder.Name);
-                    var parentId = folder.ParentId == null ? -1 : folder.ParentId;
-                    csvWriter.WriteField(parentId);
-                    csvWriter.WriteField(" ");
+                    csvWriter.WriteField("Id");
+                    csvWriter.WriteField("Name");
+                    csvWriter.WriteField("Parent Id");
+                    csvWriter.WriteField("Path");
                     csvWriter.NextRecord();
+                    foreach (var folder in folders)
+                    {
+                        csvWriter.WriteField(folder.Id);
+                        csvWriter.WriteField(folder.Name);
+                        var parentId = folder.ParentId == null ? -1 : folder.ParentId;
+                        csvWriter.WriteField(parentId);
+                        csvWriter.WriteField(" ");
+                        csvWriter.NextRecord();
 
+                    }
+                    writer.Flush();
+                    mem.Seek(0, SeekOrigin.Begin);
+                    return mem.ToArray();
                 }
-                writer.Flush();
-                mem.Seek(0, SeekOrigin.Begin);
-                return mem.ToArray();
             }
+            catch (ArgumentException)
+            {
+                throw new ArgumentException();
+
+            }
+            catch(IOException)
+            {
+                throw new IOException();
+            }
+            catch(Exception)
+            {
+                throw new Exception();
+            }
+            
         }
         public async Task ParseCsvAndAddToDb(IFormFile file)
         {
-            var lines = new List<string>();
-            using (var reader = new StreamReader(file.OpenReadStream()))
+            try
             {
-                while (reader.Peek() >= 0)
-                    lines.Add(reader.ReadLine());
+                var lines = new List<string>();
+                using (var reader = new StreamReader(file.OpenReadStream()))
+                {
+                    while (reader.Peek() >= 0)
+                        lines.Add(reader.ReadLine());
+                }
+                int lastInd = _dbSet.OrderBy(x => x.Id).Last().Id;
+                List<Folder> folders = lines.Skip(1)
+                                            .Select(line => ParseCsv(line, lastInd))
+                                            .ToList();
+                await AddRangeAsync(folders);
             }
-            int lastInd = _dbSet.OrderBy(x => x.Id).Last().Id;
-            List<Folder> folders = lines.Skip(1)
-                                        .Select(line => ParseCsv(line, lastInd))
-                                        .ToList();
-            await AddRangeAsync(folders);
+            catch (ArgumentException) { throw new ArgumentException(); }
+            catch(Exception) { throw new Exception(); }
+            
         }
-        public Folder ParseCsv(string line, int lastId)
+        protected Folder ParseCsv(string line, int lastId)
         {
-            var parts = line.Split(',');
-            return new Folder()
+            try
             {
-                Name = parts[1],
-                ParentId = int.Parse(parts[2]) == -1 ? null : int.Parse(parts[2]) + lastId,
-                Path = ""
-            };
+                var parts = line.Split(',');
+                return new Folder()
+                {
+                    Name = parts[1],
+                    ParentId = int.Parse(parts[2]) == -1 ? null : int.Parse(parts[2]) + lastId,
+                    Path = ""
+                };
+            }
+            catch (Exception ex) { throw new Exception(); }
+            
         }
         protected async Task TraverseTree(string root)
         {
-            Stack<Folder> dirs = new Stack<Folder>(20);
-
-            if (!System.IO.Directory.Exists(root))
+            try
             {
-                throw new ArgumentException();
-            }
+                Stack<Folder> dirs = new Stack<Folder>(20);
 
-            var parts = root.Split('\\');
-            var folder = new Folder()
-            {
-                Name = parts[parts.Length - 1],
-                ParentId = null,
-                Path = root
-            };
-            dirs.Push(folder);
-            await AddAsync(folder);
-
-            while (dirs.Count > 0)
-            {
-                Folder currentDir = dirs.Pop();
-
-                string[] subDirs;
-                try
+                if (!System.IO.Directory.Exists(root))
                 {
-                    subDirs = System.IO.Directory.GetDirectories(currentDir.Path);
-                }
-                catch (UnauthorizedAccessException e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-                catch (System.IO.DirectoryNotFoundException e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
+                    throw new ArgumentException();
                 }
 
-                foreach (string str in subDirs)
+                var parts = root.Split('\\');
+                var folder = new Folder()
                 {
-                    parts = str.Split('\\');
-                    folder = new Folder()
+                    Name = parts[parts.Length - 1],
+                    ParentId = null,
+                    Path = root
+                };
+                dirs.Push(folder);
+                await AddAsync(folder);
+
+                while (dirs.Count > 0)
+                {
+                    Folder currentDir = dirs.Pop();
+
+                    string[] subDirs;
+                    try
                     {
-                        Name = parts[parts.Length - 1],
-                        ParentId = currentDir.Id,
-                        Path = str
-                    };
-                    dirs.Push(folder);
-                    await AddAsync(folder);
-                }
+                        subDirs = System.IO.Directory.GetDirectories(currentDir.Path);
+                    }
+                    catch(Exception ex) { throw new Exception(); }
+                    foreach (string str in subDirs)
+                    {
+                        parts = str.Split('\\');
+                        folder = new Folder()
+                        {
+                            Name = parts[parts.Length - 1],
+                            ParentId = currentDir.Id,
+                            Path = str
+                        };
+                        dirs.Push(folder);
+                        await AddAsync(folder);
+                    }
 
+                }
+                
             }
+            catch (UnauthorizedAccessException)
+            {
+                throw new UnauthorizedAccessException();
+            }
+            catch (System.IO.DirectoryNotFoundException)
+            {
+                throw new DirectoryNotFoundException();
+            }
+            catch (IOException)
+            {
+                throw new IOException();
+            }
+            catch (Exception)
+            {
+                throw new Exception();
+            }
+
         }
     }
 }

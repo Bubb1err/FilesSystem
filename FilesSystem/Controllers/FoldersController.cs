@@ -18,8 +18,15 @@ namespace FilesSystem.Controllers
         [HttpGet]
         public async Task<IActionResult> GetFolders(int? parentId)
         {
-            var folders = await _service.GetAllAsync(x=>x.ParentId == parentId);
-            return View(folders);
+            try 
+            {
+                var folders = await _service.GetAllAsync(x => x.ParentId == parentId);
+                return View(folders);
+            }
+            catch(Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }                 
         }
         [HttpGet]
         public async Task<IActionResult> Upload()
@@ -48,7 +55,15 @@ namespace FilesSystem.Controllers
         [HttpGet]
         public IActionResult DownloadCsv()
         {
-            return File(_service.GetBytesFromDb(), "text/csv", "Folders.csv");
+            try
+            {
+                return File(_service.GetBytesFromDb(), "text/csv", "Folders.csv");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            
         }
         [HttpGet]
         public async Task<IActionResult> AddCsv()
@@ -58,8 +73,13 @@ namespace FilesSystem.Controllers
         [HttpPost]
         public async Task<IActionResult> AddCsv(IFormFile csvFile)
         {
-            await _service.ParseCsvAndAddToDb(csvFile);
-            return RedirectToAction("GetFolders");
+            try
+            {
+                await _service.ParseCsvAndAddToDb(csvFile);
+                return RedirectToAction("GetFolders");
+            }
+            catch(Exception ex) { return BadRequest(ex.Message); }
+            
 
         }
     }
